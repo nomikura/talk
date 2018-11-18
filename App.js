@@ -1,6 +1,5 @@
 import React from 'react';
-import { Platform, Button, StyleSheet, FlatList, Text, View, PermissionsAndroid } from 'react-native';
-// import { Header, } from 'react-native-elements';
+import { AsyncStorage, Platform, Button, StyleSheet, FlatList, Text, View, PermissionsAndroid } from 'react-native';
 import { createStackNavigator, createBottomTabNavigator, createAppContainer } from 'react-navigation';
 
 // ホーム画面の処理
@@ -168,13 +167,73 @@ class RegionTopicScreen extends React.Component {
 
 // 誕生日の会話
 class BirthdayTopicScreen extends React.Component {
+    constructor(props) {
+        super(props);
+        this.words = [
+            'aiueo',
+            'kakikukeko',
+            'sashisuseso',
+        ];
+        this.left = 0; // 閉区間
+        this.right = 366; // 開区間
+        this.mid = 0;
+        this.count = 0;
+        this.beforeAnswer = true;
+        this.state = {
+            say: `誕生日当てゲームやります`,
+        }
+    }
+
     render() {
         return (
             <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-                <Text>Birthday!</Text>
+                <Text>セリフ: {this.state.say}</Text>
+                <Button title="はい" onPress={this.pushYes} />
+                <Button title="いいえ" onPress={this.pushNo} />
             </View>
         );
     }
+
+    // はい、いいえをおしたときに値を渡す。もっといい方法あると思う
+    pushYes = () => {
+        if (this.count === 0) {
+            this.mid = Math.floor((this.left + this.right) / 2);
+            this.setState({ say: `誕生日は${this.mid}以降ですか？(この値を含む)` });
+
+            this.left = this.mid;
+            this.count++;
+
+            return;
+        }
+        this.search(true);
+    }
+
+    pushNo = () => {
+        if (this.count === 0) {
+            this.mid = Math.floor((this.left + this.right) / 2);
+            this.setState({ say: `誕生日は${this.mid}以降ですか？(この値を含む)` });
+            this.right = this.mid;
+            this.count++;
+            return;
+        }
+        this.search(false);
+    }
+
+    search = (judge) => {
+        console.log(judge);
+        this.count++;
+
+        this.mid = Math.floor((this.left + this.right) / 2);
+        if (judge === true) {
+            this.left = this.mid;
+        } else {
+            this.right = this.mid;
+        }
+
+        console.log(this.left, this.mid, this.right);
+        this.setState({ say: `誕生日は${this.mid}以降ですか？(この値を含む)` });
+    };
+
 }
 
 // ホーム画面のコンポーネント一覧
