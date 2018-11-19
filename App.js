@@ -1,5 +1,5 @@
 import React from 'react';
-import { AsyncStorage, Platform, Button, StyleSheet, FlatList, Text, View, PermissionsAndroid } from 'react-native';
+import { Alert, AsyncStorage, Platform, Button, StyleSheet, FlatList, TextInput, Text, View, PermissionsAndroid } from 'react-native';
 import { createStackNavigator, createBottomTabNavigator, createAppContainer } from 'react-navigation';
 
 // ホーム画面の処理
@@ -41,16 +41,89 @@ class HomeScreen extends React.Component {
 
 // 設定画面の処理
 class SettingsScreen extends React.Component {
+
+    constructor(props) {
+        super(props);
+        this.state = {
+            text: 'database access!',
+            id: '',
+            name: '',
+            mail: '',
+        };
+    }
+
     static navigationOptions = {
         title: '設定',
         headerStyle: {backgroundColor:'#aa0000',},
         headerTintColor: 'white',
     };
 
+    setData = async() => {
+        try {
+            let count = await AsyncStorage.getItem('MyData_count');
+            if (count == null) { count = 1; }
+            let data = {
+                name: this.state.name,
+                mail: this.state.mail
+            };
+            console.log(count);
+            await AsyncStorage.setItem('MyData_'+count, JSON.stringify(data));
+            let nextCount = parseInt(count, 10) + 1;
+            console.log(nextCount);
+            await AsyncStorage.setItem('MyData_count', nextCount.toString());
+            this.setState({
+                id: '',
+                name: '',
+                mail: '',
+            });
+            Alert.alert('set data!');
+        } catch (error) {
+            console.log(error);
+            Alert.alert(error);
+        }
+    }
+
+    getData = async () => {
+        try {
+            AsyncStorage.getItem('MyData_' + this.state.id)
+                .then((data) => {
+                    if (data != null) {
+                        let obj = JSON.parse(data);
+                        this.setState( { name: obj.name, mail: obj.mail } );
+                    } else {
+                        Alert.alert('no data!');
+                    }
+                });
+        } catch (error) {
+            console.log(error);
+            Alert.alert(error);
+        }
+    }
+
+    doName = (text) => this.setState({name: text});
+    doMail = (text) => this.setState({mail: text});
+    doID = (text) => this.setState({id: text});
+
     render() {
         return (
             <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-                <Text>Settings!</Text>
+                <TextInput
+                    placeholder = 'ID: '
+                    value={this.state.id}
+                    onChangeText={this.doID}
+                />
+                <TextInput
+                    placeholder = 'name: '
+                    value={this.state.name}
+                    onChangeText={this.doName}
+                />
+                <TextInput
+                    placeholder = 'birthday: '
+                    value={this.state.mail}
+                    onChangeText={this.doMail}
+                />
+                <Button title="登録" onPress={this.setData}/>
+                <Button title="見る" onPress={this.getData}/>
             </View>
         );
     }
@@ -80,13 +153,13 @@ class WeatherTopicScreen extends React.Component {
         this.state = {
             coords: null,
             weather: null,
-            say: 'ここにセリフが入ります',
+            say: '天気についての話をします',
         }
         this.index = 0;
         this.words = [
-            'aiueo',
-            'kakikukeko',
-            'sashisuseso',
+            '太陽',
+            '寒くなってきましたね',
+            '好きな季節はいつですか？',
         ];
     }
 
@@ -105,6 +178,14 @@ class WeatherTopicScreen extends React.Component {
             const jsonData = await this.fetchJson(this.state.coords.latitude, this.state.coords.longitude, 'ab54639a165fd2c6ed3d4564ced1c152');
             const weather = jsonData.weather[0].main;
             this.setState({ weather: weather });
+            this.words[0] = '今日はなんともいえない天気ですね';
+            if (weather == 'Clouds') {
+                this.words[0] = '今日は曇ってますね';
+            } else if (weather == 'Rain') {
+                this.words[0] = '今日は雨が降ってますね';
+            } else if (weather == 'Clear') {
+                this.words[0] = '今日はいい天気ですね';
+            }
             console.log(this.state.weather, weather);
 
         } catch(e) {
@@ -134,7 +215,6 @@ class WeatherTopicScreen extends React.Component {
     };
 
 }
-
 
 // 現在地を返す
 async function getCurrentPosition(timeoutMillis = 10000) {
@@ -167,6 +247,11 @@ class RegionTopicScreen extends React.Component {
 
 // 誕生日の会話
 class BirthdayTopicScreen extends React.Component {
+    static navigationOptions = {
+        title: '誕生日の話題',
+        headerStyle: {backgroundColor:'#aa0000',},
+        headerTintColor: 'white',
+    };
     constructor(props) {
         super(props);
         this.words = [
@@ -178,7 +263,7 @@ class BirthdayTopicScreen extends React.Component {
         this.right = 366; // 開区間
         this.mid = 0;
         this.count = 0;
-        this.beforeAnswer = true;
+        this.ok = 0; // 0: 探索中, 1: 正解: 2: 不正解
         this.state = {
             say: `誕生日当てゲームやります`,
         }
@@ -196,33 +281,38 @@ class BirthdayTopicScreen extends React.Component {
 
     // はい、いいえをおしたときに値を渡す。もっといい方法あると思う
     pushYes = () => {
-        if (this.count === 0) {
-            this.mid = Math.floor((this.left + this.right) / 2);
-            this.setState({ say: `誕生日は${this.mid}以降ですか？(この値を含む)` });
-
-            this.left = this.mid;
-            this.count++;
-
-            return;
+        // 「誕生日はnです」に対する処理.Yesが押されているので、登録画面に移動する
+        if (this.ok === 1) {
+            this.move()
         }
-        this.search(true);
-    }
+        this.search(true); }
+    pushNo = () => { this.search(false); }
 
-    pushNo = () => {
-        if (this.count === 0) {
-            this.mid = Math.floor((this.left + this.right) / 2);
-            this.setState({ say: `誕生日は${this.mid}以降ですか？(この値を含む)` });
-            this.right = this.mid;
-            this.count++;
-            return;
+    numberToBirthday = (number) => {
+        let months = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30 ,31];
+        let sum = 0, month = 0;
+        for (let i = 0; i < months.length; i++) {
+            if (sum + months[i] > number) {
+                month = i;
+                break;
+            }
+            sum += months[i];
         }
-        this.search(false);
+        let day = (sum == 0 ? number : number % sum);
+
+        return `${month+1}月${day+1}日`;
     }
 
     search = (judge) => {
-        console.log(judge);
         this.count++;
+        // 「ゲームを開始します」に対する処理(初回のみ)
+        if (this.count === 1) {
+            this.mid = Math.floor((this.left + this.right) / 2);
+            this.setState({ say: `誕生日は${this.numberToBirthday(this.mid)}以降ですか？(この日付を含む)` });
+            return;
+        }
 
+        // 「誕生日はnですか？」に対する処理(初回以降)
         this.mid = Math.floor((this.left + this.right) / 2);
         if (judge === true) {
             this.left = this.mid;
@@ -230,9 +320,38 @@ class BirthdayTopicScreen extends React.Component {
             this.right = this.mid;
         }
 
-        console.log(this.left, this.mid, this.right);
-        this.setState({ say: `誕生日は${this.mid}以降ですか？(この値を含む)` });
+        // 誕生日が確定する
+        if (Math.abs(this.right - this.left) <= 1) {
+            this.setState({ say: `誕生日は${this.numberToBirthday(this.left)}です` });
+            this.ok = 1;
+            return;
+        }
+
+        // 誕生日が確定していないとき、質問を続ける
+        this.mid = Math.floor((this.left + this.right) / 2);
+        this.setState({ say: `誕生日は${this.numberToBirthday(this.mid)}以降ですか？(この日付を含む)` });
     };
+
+    move = () => {
+        this.props.navigation.navigate('BirthdayRegistration')
+    }
+
+}
+
+class BirthdayRegistrationScreen extends React.Component {
+    static navigationOptions = {
+        title: '誕生日を登録',
+        headerStyle: {backgroundColor:'#aa0000',},
+        headerTintColor: 'white',
+    };
+
+    render() {
+        return (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                <Text>登録!</Text>
+            </View>
+        );
+    }
 
 }
 
@@ -243,6 +362,7 @@ const HomeStack = createStackNavigator({
     Weather: { screen: WeatherTopicScreen },
     Region: { screen: RegionTopicScreen },
     Birthday: { screen: BirthdayTopicScreen },
+    BirthdayRegistration: { screen: BirthdayRegistrationScreen },
 });
 
 // 設定画面のコンポーネント一覧
